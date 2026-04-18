@@ -152,12 +152,16 @@ export async function POST(request: Request) {
     step = "gemini_enrich";
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
     const enriched: EnrichedBrand[] = [];
+    const geminiErrors: { word: string; error: string }[] = [];
     for (const word of survivors) {
       try {
         const e = await enrichWithGemini(ai, word, niceClass);
         if (e) enriched.push(e);
+        else geminiErrors.push({ word, error: "Gemini returned unparseable JSON" });
       } catch (err) {
+        const message = (err as Error).message ?? String(err);
         console.error(`Gemini enrichment failed for ${word}:`, err);
+        geminiErrors.push({ word, error: message });
       }
     }
 
@@ -194,6 +198,7 @@ export async function POST(request: Request) {
       survivors: survivors.length,
       inserted,
       brands: enriched,
+      geminiErrors: geminiErrors.length > 0 ? geminiErrors : undefined,
     });
   } catch (err) {
     const stepErr = err instanceof StepError ? err : null;

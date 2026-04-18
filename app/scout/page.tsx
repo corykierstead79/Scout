@@ -32,6 +32,7 @@ type ScoutResult = {
   error?: string;
   step?: string;
   detail?: unknown;
+  geminiErrors?: Array<{ word: string; error: string }>;
 };
 
 export default function ScoutPage() {
@@ -178,6 +179,22 @@ export default function ScoutPage() {
                       </li>
                     ))}
                   </ul>
+                )}
+
+                {result.geminiErrors && result.geminiErrors.length > 0 && (
+                  <div className="mt-6 rounded-lg border border-red-900/60 bg-red-950/30 p-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-red-400">
+                      Gemini enrichment failed
+                    </p>
+                    <ul className="mt-2 space-y-1 text-xs text-stone-300">
+                      {result.geminiErrors.map((g, i) => (
+                        <li key={i}>
+                          <span className="font-medium">{g.word}</span>:{" "}
+                          <span className="text-stone-400">{g.error}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </>
             ) : (
