@@ -45,6 +45,17 @@ create table if not exists public.zombie_brands_au (
   unique (word, nice_class)
 );
 
+-- Defensive: if the table predates this schema, backfill any missing columns.
+alter table public.zombie_brands_au add column if not exists decade text;
+alter table public.zombie_brands_au add column if not exists lodgement_start date;
+alter table public.zombie_brands_au add column if not exists lodgement_end date;
+alter table public.zombie_brands_au add column if not exists aesthetic_score numeric;
+alter table public.zombie_brands_au add column if not exists mood_board_prompt text;
+alter table public.zombie_brands_au add column if not exists created_at timestamptz not null default now();
+
+-- Force PostgREST to refresh its schema cache.
+notify pgrst, 'reload schema';
+
 alter table public.zombie_brands_au enable row level security;
 
 -- Allow anonymous inserts so the scout route (using the publishable key) can write.
