@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const IP_AU_SEARCH_URL =
   "https://production.api.ipaustralia.gov.au/public/australian-trade-mark-search-api/v1/search/quick";
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-pro";
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3-pro";
 
 type IpAuHit = {
   wordsAndImages?: string;
