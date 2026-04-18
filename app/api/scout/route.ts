@@ -6,18 +6,10 @@ import { createClient } from "@/utils/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const IP_AU_SEARCH_URL =
-  "https://production.api.ipaustralia.gov.au/public/australian-trade-mark-search-api/v1/search/quick";
-
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3-pro";
 
-type IpAuHit = {
-  wordsAndImages?: string;
-  tradeMarkNumber?: string | number;
-  lodgementDate?: string;
-  status?: string;
-  niceClasses?: number[];
-};
+// IPGOD uses several status values for "dead" trademarks.
+const DEAD_STATUSES = ["DEAD", "REMOVED", "CANCELLED", "LAPSED", "EXPIRED"];
 
 type EnrichedBrand = {
   word: string;
@@ -46,73 +38,9 @@ function decadeToRange(decade: string): { startDate: string; endDate: string } {
   };
 }
 
-async function fetchDeadTrademarks(
-  niceClass: number,
-  startDate: string,
-  endDate: string,
-): Promise<IpAuHit[]> {
-  const token = process.env.IP_AUSTRALIA_TOKEN;
-  if (!token) {
-    throw new StepError(
-      "ip_australia_auth",
-      "IP_AUSTRALIA_TOKEN is not set. Register at https://developer.ipaustralia.gov.au to get a JWT, then add it to Netlify env.",
-    );
-  }
-
-  const body = {
-    quickSearchType: "WORD",
-    status: ["DEAD", "REMOVED", "CANCELLED"],
-    niceClasses: [niceClass],
-    lodgementDateFrom: startDate,
-    lodgementDateTo: endDate,
-    pageSize: 100,
-    pageNumber: 0,
-  };
-
-  let res: Response;
-  try {
-    res = await fetch(IP_AU_SEARCH_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(body),
-    });
-  } catch (e) {
-    throw new StepError(
-      "ip_australia_fetch",
-      `Network error calling IP Australia: ${(e as Error).message}`,
-    );
-  }
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new StepError(
-      "ip_australia_http",
-      `IP Australia search returned ${res.status}`,
-      text.slice(0, 500),
-    );
-  }
-
-  let data: unknown;
-  try {
-    data = await res.json();
-  } catch (e) {
-    throw new StepError(
-      "ip_australia_parse",
-      `IP Australia returned non-JSON: ${(e as Error).message}`,
-    );
-  }
-
-  const d = data as { results?: IpAuHit[]; hits?: IpAuHit[] };
-  return d.results ?? d.hits ?? [];
-}
-
 // Placeholder for a domain availability check.
-// TODO: Wire up a real domain availability API (e.g. Domainr, WhoisXML, or
-// auDA-accredited registrar API) to confirm .com.au and .com are unregistered.
+// TODO: Wire up a real domain availability API (e.g. Domainr, WhoisXML) to
+// confirm .com.au and .com are unregistered.
 async function isDomainAvailable(_word: string): Promise<boolean> {
   return true;
 }
@@ -183,14 +111,31 @@ export async function POST(request: Request) {
     step = "parse_decade";
     const { startDate, endDate } = decadeToRange(decade);
 
-    step = "ip_australia_fetch";
-    const hits = await fetchDeadTrademarks(niceClass, startDate, endDate);
+    step = "supabase_query";
+    const cookieStore = await cookies();
+    const supabase = createClient(cookieStore);
+    const { data: hits, error: queryError } = await supabase
+      .from("ipgod_trademarks")
+      .select("word, nice_classes, status, lodgement_date")
+      .in("status", DEAD_STATUSES)
+      .contains("nice_classes", [niceClass])
+      .gte("lodgement_date", startDate)
+      .lte("lodgement_date", endDate)
+      .limit(100);
+
+    if (queryError) {
+      throw new StepError(
+        step,
+        `Supabase query failed: ${queryError.message}`,
+        queryError,
+      );
+    }
 
     step = "dedupe_candidates";
     const seen = new Set<string>();
-    const candidates = hits
-      .map((h) => (h.wordsAndImages ?? "").trim())
-      .filter((w) => {
+    const candidates = (hits ?? [])
+      .map((h) => (h.word ?? "").trim())
+      .filter((w): w is string => {
         if (!w) return false;
         const key = w.toLowerCase();
         if (seen.has(key)) return false;
@@ -217,8 +162,6 @@ export async function POST(request: Request) {
     }
 
     step = "supabase_insert";
-    const cookieStore = await cookies();
-    const supabase = createClient(cookieStore);
     const rows = enriched.map((b) => ({
       word: b.word,
       nice_class: b.niceClass,
@@ -233,7 +176,7 @@ export async function POST(request: Request) {
     if (rows.length > 0) {
       const { data, error } = await supabase
         .from("zombie_brands_au")
-        .insert(rows)
+        .upsert(rows, { onConflict: "word,nice_class", ignoreDuplicates: true })
         .select();
       if (error) {
         throw new StepError(
