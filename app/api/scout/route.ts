@@ -6,7 +6,7 @@ import { createClient } from "@/utils/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.1-pro";
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.1-pro-preview";
 
 // IPGOD uses several status values for "dead" trademarks.
 const DEAD_STATUSES = ["DEAD", "REMOVED", "CANCELLED", "LAPSED", "EXPIRED"];
