@@ -51,6 +51,14 @@ async function fetchDeadTrademarks(
   startDate: string,
   endDate: string,
 ): Promise<IpAuHit[]> {
+  const token = process.env.IP_AUSTRALIA_TOKEN;
+  if (!token) {
+    throw new StepError(
+      "ip_australia_auth",
+      "IP_AUSTRALIA_TOKEN is not set. Register at https://developer.ipaustralia.gov.au to get a JWT, then add it to Netlify env.",
+    );
+  }
+
   const body = {
     quickSearchType: "WORD",
     status: ["DEAD", "REMOVED", "CANCELLED"],
@@ -68,6 +76,7 @@ async function fetchDeadTrademarks(
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(body),
     });
