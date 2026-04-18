@@ -30,6 +30,8 @@ type ScoutResult = {
     mood_board_prompt: string;
   }>;
   error?: string;
+  step?: string;
+  detail?: unknown;
 };
 
 export default function ScoutPage() {
@@ -181,7 +183,19 @@ export default function ScoutPage() {
             ) : (
               <div className="text-sm text-red-400">
                 <p className="font-medium">Scout failed</p>
-                <p className="mt-1 text-stone-400">{result.error}</p>
+                {result.step && (
+                  <p className="mt-1 text-xs uppercase tracking-wider text-amber-400">
+                    Step: {result.step}
+                  </p>
+                )}
+                <p className="mt-2 text-stone-300">{result.error}</p>
+                {result.detail !== undefined && result.detail !== null && (
+                  <pre className="mt-3 max-h-64 overflow-auto rounded-lg bg-stone-950 p-3 text-xs text-stone-400">
+                    {typeof result.detail === "string"
+                      ? result.detail
+                      : JSON.stringify(result.detail, null, 2)}
+                  </pre>
+                )}
               </div>
             )}
           </section>
